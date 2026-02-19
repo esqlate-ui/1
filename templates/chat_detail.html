@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}— Чат #{{ chat.id }}{% endblock %}
+{% block content %}
+<div class="flex items-center gap-3 mb-6">
+  <a href="/chats" class="btn btn-ghost btn-sm">← Назад</a>
+  <div class="page-header" style="margin:0;">
+    <h2>💬 Чат #{{ chat.id }}</h2>
+    <p>{{ messages|length }} сообщений</p>
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-body" style="display:flex;gap:40px;flex-wrap:wrap;">
+    <div>
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;">Написал</div>
+      <a href="/user/{{ chat.sender_id }}" style="text-decoration:none;">
+        <div class="flex items-center gap-2">
+          <div class="avatar" style="background:linear-gradient(135deg,var(--blue),var(--purple));">{{ sender_name[0] }}</div>
+          <div><div style="font-size:15px;font-weight:700;color:var(--blue);">{{ sender_name }}</div>
+          <div style="font-size:12px;color:var(--muted);">ID: {{ chat.sender_id }}</div></div>
+        </div>
+      </a>
+    </div>
+    <div style="align-self:center;font-size:22px;color:var(--muted);">→</div>
+    <div>
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;">Получил</div>
+      <a href="/user/{{ chat.target_id }}" style="text-decoration:none;">
+        <div class="flex items-center gap-2">
+          <div class="avatar" style="background:linear-gradient(135deg,var(--pink),var(--purple));">{{ target_name[0] }}</div>
+          <div><div style="font-size:15px;font-weight:700;color:var(--pink);">{{ target_name }}</div>
+          <div style="font-size:12px;color:var(--muted);">ID: {{ chat.target_id }}</div></div>
+        </div>
+      </a>
+    </div>
+    <div style="margin-left:auto;align-self:center;text-align:right;">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">СООБЩЕНИЙ</div>
+      <div style="font-size:36px;font-weight:900;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;">{{ messages|length }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><h3>💬 Переписка</h3></div>
+  <div id="msgs" style="padding:20px;max-height:65vh;overflow-y:auto;display:flex;flex-direction:column;gap:8px;">
+  {% if not messages %}
+    <div style="text-align:center;padding:40px;color:var(--muted);">Нет сообщений</div>
+  {% endif %}
+  {% for m in messages %}
+    <div style="display:flex;flex-direction:column;align-items:{% if m.is_sender %}flex-start{% else %}flex-end{% endif %};">
+      <div style="max-width:68%;padding:10px 15px;border-radius:{% if m.is_sender %}5px 16px 16px 16px{% else %}16px 5px 16px 16px{% endif %};
+        background:{% if m.is_sender %}rgba(96,165,250,0.1){% else %}rgba(244,114,182,0.1){% endif %};
+        border:1px solid {% if m.is_sender %}rgba(96,165,250,0.2){% else %}rgba(244,114,182,0.2){% endif %};">
+        <div style="font-size:11px;font-weight:600;color:{% if m.is_sender %}var(--blue){% else %}var(--pink){% endif %};margin-bottom:5px;">
+          {% if m.is_sender %}{{ sender_name }}{% else %}{{ target_name }}{% endif %}
+        </div>
+
+        {% if m.msg_type == 'text' %}
+          <div style="font-size:14px;color:var(--text);word-break:break-word;line-height:1.5;">{{ m.content }}</div>
+
+        {% elif m.msg_type == 'photo' and m.file_id %}
+          <img src="/media/{{ m.file_id }}" loading="lazy"
+               style="max-width:280px;max-height:320px;border-radius:10px;display:block;cursor:pointer;"
+               onclick="openImg(this.src)" />
+          {% if m.content %}<div style="font-size:13px;color:var(--text);margin-top:6px;">{{ m.content }}</div>{% endif %}
+
+        {% elif m.msg_type == 'video' and m.file_id %}
+          <video controls style="max-width:280px;max-height:320px;border-radius:10px;display:block;">
+            <source src="/media/{{ m.file_id }}" />
+            Видео не поддерживается браузером
+          </video>
+          {% if m.content %}<div style="font-size:13px;color:var(--text);margin-top:6px;">{{ m.content }}</div>{% endif %}
+
+        {% elif m.msg_type == 'voice' and m.file_id %}
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:18px;">🎤</span>
+            <audio controls style="height:36px;max-width:230px;">
+              <source src="/media/{{ m.file_id }}" />
+            </audio>
+          </div>
+
+        {% elif m.msg_type == 'video_note' and m.file_id %}
+          <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+            <span style="font-size:12px;color:var(--muted);">⭕ Видеокружок</span>
+            <video controls style="width:200px;height:200px;border-radius:50%;object-fit:cover;display:block;">
+              <source src="/media/{{ m.file_id }}" />
+            </video>
+          </div>
+
+        {% elif m.msg_type == 'animation' and m.file_id %}
+          <div>
+            <span style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">🎞️ Гифка</span>
+            <img src="/media/{{ m.file_id }}" loading="lazy"
+                 style="max-width:280px;max-height:280px;border-radius:10px;display:block;" />
+          </div>
+
+        {% elif m.msg_type == 'sticker' and m.file_id %}
+          <div>
+            <span style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">🎭 Стикер</span>
+            <img src="/media/{{ m.file_id }}" loading="lazy"
+                 style="width:120px;height:120px;object-fit:contain;display:block;" />
+          </div>
+
+        {% elif m.msg_type == 'audio' and m.file_id %}
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:18px;">🎵</span>
+            <audio controls style="height:36px;max-width:230px;">
+              <source src="/media/{{ m.file_id }}" />
+            </audio>
+          </div>
+
+        {% elif m.msg_type == 'document' and m.file_id %}
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:20px;">📄</span>
+            <a href="/media/{{ m.file_id }}" target="_blank"
+               style="color:var(--accent);font-size:13px;text-decoration:underline;">
+              {{ m.content or 'Скачать файл' }}
+            </a>
+          </div>
+
+        {% else %}
+          <div style="color:var(--muted);font-size:14px;">
+            {% if m.msg_type == 'photo' %}🖼️ Фото
+            {% elif m.msg_type == 'video' %}🎬 Видео
+            {% elif m.msg_type == 'voice' %}🎤 Голосовое
+            {% elif m.msg_type == 'video_note' %}⭕ Кружок
+            {% elif m.msg_type == 'sticker' %}🎭 Стикер
+            {% elif m.msg_type == 'animation' %}🎞️ Гифка
+            {% elif m.msg_type == 'audio' %}🎵 Аудио
+            {% elif m.msg_type == 'document' %}📄 Документ
+            {% else %}[{{ m.msg_type }}]{% endif %}
+          </div>
+        {% endif %}
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:3px;padding:0 4px;">{{ m.time_display }}</div>
+    </div>
+  {% endfor %}
+  </div>
+</div>
+
+<!-- Лайтбокс для фото -->
+<div id="lightbox" onclick="this.style.display='none'"
+     style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:9999;align-items:center;justify-content:center;cursor:zoom-out;">
+  <img id="lb-img" style="max-width:90%;max-height:90%;border-radius:12px;object-fit:contain;" />
+</div>
+
+<script>
+  const el = document.getElementById('msgs');
+  el.scrollTop = el.scrollHeight;
+
+  function openImg(src) {
+    const lb = document.getElementById('lightbox');
+    document.getElementById('lb-img').src = src;
+    lb.style.display = 'flex';
+  }
+</script>
+{% endblock %}

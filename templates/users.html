@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}— Пользователи{% endblock %}
+{% block content %}
+<div class="page-header flex items-center justify-between">
+  <div><h2>👥 Пользователи</h2><p>{{ users|length }} зарегистрировано</p></div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-body" style="padding:16px 22px;">
+    <div class="search-box"><input type="text" id="search" placeholder="Поиск по имени, username, ID..."></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Пользователь</th>
+          <th>ID / Username</th>
+          <th>Возраст</th>
+          <th>Пол</th>
+          <th>Интересы</th>
+          <th>Статус</th>
+          <th>Регистрация</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="users-tbody">
+      {% for u in users %}
+        <tr>
+          <td>
+            <div class="flex items-center gap-2">
+              <div class="avatar">{{ u.name[0] }}</div>
+              <span style="font-weight:600;color:var(--text);">{{ u.name }}</span>
+            </div>
+          </td>
+          <td>
+            <div style="font-size:12px;color:var(--muted);">{{ u.user_id }}</div>
+            {% if u.username %}<a href="https://t.me/{{ u.username }}" target="_blank" style="color:var(--accent);text-decoration:none;font-size:13px;">@{{ u.username }}</a>{% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+          <td>{{ u.age }}</td>
+          <td>
+            {% if u.gender == 'male' %}<span class="badge badge-male">👦 Парень</span>
+            {% elif u.gender == 'female' %}<span class="badge badge-female">👧 Девушка</span>
+            {% else %}<span class="badge badge-other">⚧ Другое</span>{% endif %}
+          </td>
+          <td class="truncate text-muted">{{ u.interests_display }}</td>
+          <td>
+            {% if u.banned %}<span class="badge badge-banned">🔒 Забанен</span>
+            {% else %}<span class="badge badge-active">✅ Активен</span>{% endif %}
+          </td>
+          <td class="text-muted">{{ u.created_display }}</td>
+          <td><a href="/user/{{ u.user_id }}" class="btn btn-ghost btn-sm">Открыть</a></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="8" style="text-align:center;padding:40px;color:var(--muted);">Нет пользователей</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+<script>filterTable('search','users-tbody');</script>
+{% endblock %}

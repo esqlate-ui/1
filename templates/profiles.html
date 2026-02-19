@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}— Анкеты{% endblock %}
+{% block content %}
+<div class="page-header"><h2>📋 Активные анкеты</h2><p>{{ profiles|length }} сейчас активно</p></div>
+
+<div class="card mb-4"><div class="card-body" style="padding:16px 22px;">
+  <div class="search-box"><input type="text" id="search" placeholder="Поиск..."></div>
+</div></div>
+
+<div class="card">
+  <div class="table-wrap"><table>
+    <thead><tr><th>Пользователь</th><th>Возраст / Пол</th><th>Интересы</th><th>Описание</th><th>❤️</th><th>Медиа</th><th>Создана</th></tr></thead>
+    <tbody id="ptbody">
+    {% for p in profiles %}
+    <tr>
+      <td><div class="flex items-center gap-2">
+        <div class="avatar">{{ p.name[0] }}</div>
+        <a href="/user/{{ p.user_id }}" style="color:var(--text);text-decoration:none;font-weight:600;">{{ p.name }}</a>
+      </div></td>
+      <td>{{ p.age }} | {{ p.gender_display }}</td>
+      <td class="text-muted" style="font-size:13px;">{{ p.interests_display }}</td>
+      <td><div class="truncate" style="max-width:200px;font-size:13px;">{{ p.description }}</div></td>
+      <td style="color:var(--pink);">❤️ {{ p.likes }}</td>
+      <td class="text-muted">{{ p.media|length }} файл(ов)</td>
+      <td class="text-muted">{{ p.created_display }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7" style="text-align:center;padding:40px;color:var(--muted);">Нет активных анкет</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+<script>filterTable('search','ptbody');</script>
+{% endblock %}

@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}— Дашборд{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h2>📊 Дашборд</h2>
+  <p>Общая статистика платформы Beem</p>
+</div>
+
+<div class="stat-grid">
+  <div class="stat-card orange">
+    <div class="stat-icon">👥</div>
+    <div class="stat-num" id="s-users">{{ users_count }}</div>
+    <div class="stat-label">Пользователей</div>
+  </div>
+  <div class="stat-card blue">
+    <div class="stat-icon">💬</div>
+    <div class="stat-num" id="s-chats">{{ chats_count }}</div>
+    <div class="stat-label">Чатов</div>
+  </div>
+  <div class="stat-card green">
+    <div class="stat-icon">📋</div>
+    <div class="stat-num" id="s-profiles">{{ profiles_count }}</div>
+    <div class="stat-label">Активных анкет</div>
+  </div>
+  <div class="stat-card purple">
+    <div class="stat-icon">✉️</div>
+    <div class="stat-num" id="s-messages">{{ messages_count }}</div>
+    <div class="stat-label">Сообщений</div>
+  </div>
+  <div class="stat-card red">
+    <div class="stat-icon">⚠️</div>
+    <div class="stat-num" id="s-reports">{{ reports_count }}</div>
+    <div class="stat-label">Новых жалоб</div>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+  <div class="card">
+    <div class="card-header"><h3>🚀 Быстрый доступ</h3></div>
+    <div class="card-body" style="display:flex;flex-direction:column;gap:10px;">
+      <a href="/users" class="btn btn-ghost">👥 Все пользователи</a>
+      <a href="/profiles" class="btn btn-ghost">📋 Активные анкеты</a>
+      <a href="/chats" class="btn btn-ghost">💬 Все чаты</a>
+      <a href="/reports" class="btn btn-ghost">⚠️ Жалобы</a>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header"><h3>ℹ️ О системе</h3></div>
+    <div class="card-body text-muted" style="line-height:2;">
+      <div>🐝 Beem — анонимные знакомства</div>
+      <div>⚡ Статистика обновляется каждые 30 сек</div>
+      <div>🔒 Только ты видишь эту панель</div>
+      <div>📱 Также доступно через /admin в боте</div>
+    </div>
+  </div>
+</div>
+
+<script>
+setInterval(async()=>{
+  const d=await(await fetch('/api/stats')).json();
+  document.getElementById('s-users').textContent=d.users;
+  document.getElementById('s-chats').textContent=d.chats;
+  document.getElementById('s-profiles').textContent=d.profiles;
+  document.getElementById('s-messages').textContent=d.messages;
+  document.getElementById('s-reports').textContent=d.reports;
+},30000);
+</script>
+{% endblock %}

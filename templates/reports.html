@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}— Жалобы{% endblock %}
+{% block content %}
+<div class="page-header"><h2>⚠️ Жалобы</h2><p>{{ reports|length }} всего</p></div>
+
+<div class="card">
+  <div class="table-wrap"><table>
+    <thead><tr><th>#</th><th>На кого</th><th>Причина</th><th>Чат</th><th>Статус</th><th>Время</th><th></th></tr></thead>
+    <tbody>
+    {% for r in reports %}
+    <tr>
+      <td class="text-muted">#{{ r.id }}</td>
+      <td><a href="/user/{{ r.reported_id }}" style="color:var(--text);text-decoration:none;font-weight:600;">
+        {{ r.reported_name or r.reported_id }}
+        {% if r.reported_username %}<span class="text-muted">@{{ r.reported_username }}</span>{% endif %}
+      </a></td>
+      <td>
+        {% if r.reason == 'nsfw' %}🔞 Нежелательный контент
+        {% elif r.reason == 'spam' %}💬 Спам
+        {% elif r.reason == 'abuse' %}😡 Оскорбления
+        {% elif r.reason == 'scam' %}🤖 Бот/скам
+        {% else %}{{ r.reason or '—' }}{% endif %}
+      </td>
+      <td><a href="/chat/{{ r.chat_id }}" class="btn btn-ghost btn-sm">#{{ r.chat_id }}</a></td>
+      <td>
+        {% if r.status == 'new' %}<span class="badge badge-new">🆕 Новая</span>
+        {% else %}<span class="badge badge-resolved">✅ Закрыта</span>{% endif %}
+      </td>
+      <td class="text-muted">{{ r.created_display }}</td>
+      <td style="display:flex;gap:8px;">
+        <a href="/user/{{ r.reported_id }}" class="btn btn-danger btn-sm">🔒 Бан</a>
+        {% if r.status == 'new' %}
+        <form method="POST" action="/report/{{ r.id }}/resolve" style="display:inline;">
+          <button class="btn btn-success btn-sm" type="submit">✅</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7" style="text-align:center;padding:40px;color:var(--muted);">✅ Жалоб нет!</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+{% endblock %}

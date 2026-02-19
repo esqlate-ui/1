@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}— Чаты{% endblock %}
+{% block content %}
+<div class="page-header"><h2>💬 Чаты</h2><p>{{ chats|length }} всего</p></div>
+
+<div class="card mb-4"><div class="card-body" style="padding:16px 22px;">
+  <div class="search-box"><input type="text" id="search" placeholder="Поиск по именам..."></div>
+</div></div>
+
+<div class="card">
+  <div class="table-wrap"><table>
+    <thead><tr><th>#</th><th>От кого</th><th>Кому</th><th>Сообщений</th><th>Последнее</th><th>Время</th><th></th></tr></thead>
+    <tbody id="ctbody">
+    {% for c in chats %}
+    <tr>
+      <td class="text-muted">#{{ c.id }}</td>
+      <td><div class="flex items-center gap-2">
+        <div class="avatar" style="background:linear-gradient(135deg,var(--blue),var(--purple));">{{ (c.sender_name or '?')[0] }}</div>
+        <a href="/user/{{ c.sender_id }}" style="color:var(--blue);text-decoration:none;font-weight:600;">{{ c.sender_name or c.sender_id }}</a>
+      </div></td>
+      <td><div class="flex items-center gap-2">
+        <div class="avatar" style="background:linear-gradient(135deg,var(--pink),var(--purple));">{{ (c.target_name or '?')[0] }}</div>
+        <a href="/user/{{ c.target_id }}" style="color:var(--pink);text-decoration:none;font-weight:600;">{{ c.target_name or c.target_id }}</a>
+      </div></td>
+      <td><span class="badge badge-new">{{ c.msg_count }}</span></td>
+      <td class="text-muted truncate">{{ c.last_msg or '—' }}</td>
+      <td class="text-muted">{{ c.created_display }}</td>
+      <td><a href="/chat/{{ c.id }}" class="btn btn-ghost btn-sm">Открыть</a></td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7" style="text-align:center;padding:40px;color:var(--muted);">Нет чатов</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+<script>filterTable('search','ctbody');</script>
+{% endblock %}

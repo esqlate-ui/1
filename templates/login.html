@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Beem — Вход</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif;background:#0a0a0f;display:flex;align-items:center;justify-content:center;min-height:100vh;}
+  .wrap{width:100%;max-width:400px;padding:24px;}
+  .card{background:#12121a;border:1px solid #2a2a3d;border-radius:20px;padding:44px 40px;}
+  .logo{text-align:center;margin-bottom:36px;}
+  .bee{font-size:52px;display:block;margin-bottom:12px;}
+  h1{font-size:32px;font-weight:900;background:linear-gradient(135deg,#f5a623,#f76b1c);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+  .sub{color:#6b6b8a;font-size:13px;margin-top:6px;}
+  .field{margin-bottom:20px;}
+  label{display:block;font-size:12px;font-weight:600;color:#6b6b8a;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px;}
+  input[type=password]{width:100%;padding:14px 18px;background:#1a1a26;border:1px solid #2a2a3d;border-radius:12px;color:#e2e2f0;font-size:15px;outline:none;transition:0.15s;}
+  input[type=password]:focus{border-color:#f5a623;box-shadow:0 0 0 3px rgba(245,166,35,0.1);}
+  .btn{width:100%;padding:15px;background:linear-gradient(135deg,#f5a623,#f76b1c);border:none;border-radius:12px;color:#000;font-size:15px;font-weight:800;cursor:pointer;transition:0.15s;letter-spacing:0.3px;}
+  .btn:hover{opacity:0.9;transform:translateY(-1px);}
+  .error{margin-top:16px;padding:12px 16px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);border-radius:10px;color:#ef4444;font-size:13px;text-align:center;}
+  .hint{text-align:center;margin-top:20px;font-size:12px;color:#3a3a4d;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <div class="logo">
+      <span class="bee">🐝</span>
+      <h1>Beem Admin</h1>
+      <p class="sub">Панель управления</p>
+    </div>
+    <form method="POST">
+      <div class="field">
+        <label>Пароль администратора</label>
+        <input type="password" name="password" placeholder="••••••••••" autofocus>
+      </div>
+      <button class="btn" type="submit">Войти →</button>
+      {% if error %}<div class="error">⚠️ {{ error }}</div>{% endif %}
+    </form>
+    <p class="hint">Доступ только для администратора</p>
+  </div>
+</div>
+</body>
+</html>
