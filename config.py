@@ -23,8 +23,40 @@ INTERESTS = [
 INTERESTS_DISPLAY = {key: name for name, key in INTERESTS}
 
 BAN_DURATIONS = {
-    "1h":       ("1 час",      3600),
-    "24h":      ("24 часа",    86400),
-    "7d":       ("7 дней",     604800),
-    "forever":  ("Навсегда",   None),
+    "1h":      ("1 час",    3600),
+    "24h":     ("24 часа",  86400),
+    "7d":      ("7 дней",   604800),
+    "forever": ("Навсегда", None),
 }
+
+# ── Лимиты ────────────────────────────────────────────────────────────────────
+PROFILES_LIMIT_FREE    = 2
+PROFILES_LIMIT_PREMIUM = 5
+
+# ── Premium тарифы ────────────────────────────────────────────────────────────
+PREMIUM_PLANS = {
+    "week": {
+        "label": "🗓 Неделя",
+        "days":  7,
+        "stars": 75,
+        "ton":   0.5,
+        "desc":  "7 дней Premium",
+    },
+    "month": {
+        "label": "📅 Месяц",
+        "days":  30,
+        "stars": 199,
+        "ton":   1.5,
+        "desc":  "30 дней Premium",
+    },
+    "forever": {
+        "label": "♾️ Навсегда",
+        "days":  None,
+        "stars": 499,
+        "ton":   3.5,
+        "desc":  "Бессрочный Premium",
+    },
+}
+
+# ── TON кошелёк ───────────────────────────────────────────────────────────────
+TON_WALLET = "UQDZwUwWPTFJ58IwPQGs0BKXxLTKM_-r6A6sEN8YDfq5HSOY"

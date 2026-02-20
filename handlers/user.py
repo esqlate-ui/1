@@ -20,18 +20,18 @@ def fmt_interests(interests_str: str) -> str:
 # ── FSM ────────────────────────────────────────────────────────────────────────
 
 class Reg(StatesGroup):
-    name = State()
-    age = State()
-    gender = State()
+    name      = State()
+    age       = State()
+    gender    = State()
     interests = State()
 
 class Sett(StatesGroup):
-    name = State()
-    age = State()
-    gender = State()
+    name      = State()
+    age       = State()
+    gender    = State()
     interests = State()
 
-# ── Start ──────────────────────────────────────────────────────────────────────
+# ── /start ─────────────────────────────────────────────────────────────────────
 
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext):
@@ -58,6 +58,8 @@ async def cmd_start(message: Message, state: FSMContext):
         )
         await state.set_state(Reg.name)
 
+# ── Регистрация ────────────────────────────────────────────────────────────────
+
 @router.message(Reg.name)
 async def reg_name(message: Message, state: FSMContext):
     name = message.text.strip()[:30]
@@ -72,9 +74,9 @@ async def reg_name(message: Message, state: FSMContext):
 async def reg_age(message: Message, state: FSMContext):
     try:
         age = int(message.text.strip())
-        assert 10 <= age <= 99
+        assert 13 <= age <= 99
     except:
-        await message.answer("Введи возраст числом (10–99):")
+        await message.answer("Введи возраст числом (13–99):")
         return
     await state.update_data(age=age)
     await message.answer("Твой пол:", reply_markup=gender_kb("regender"))
@@ -84,14 +86,18 @@ async def reg_age(message: Message, state: FSMContext):
 async def reg_gender(callback: CallbackQuery, state: FSMContext):
     gender = callback.data.split(":")[1]
     await state.update_data(gender=gender, interests=[])
-    await callback.message.edit_text("Выбери интересы (хотя бы один):", reply_markup=interests_kb([]))
+    await callback.message.edit_text(
+        "Выбери интересы (хотя бы один):",
+        reply_markup=interests_kb([])
+    )
     await state.set_state(Reg.interests)
 
 @router.callback_query(Reg.interests, F.data.startswith("interest:"))
 async def reg_interests(callback: CallbackQuery, state: FSMContext):
-    key = callback.data.split(":")[1]
+    key  = callback.data.split(":")[1]
     data = await state.get_data()
     selected = data.get("interests", [])
+
     if key == "done":
         if not selected:
             await callback.answer("Выбери хотя бы один интерес!", show_alert=True)
@@ -116,13 +122,15 @@ async def reg_interests(callback: CallbackQuery, state: FSMContext):
             reply_markup=main_kb(has_profile=False)
         )
     else:
-        if key in selected: selected.remove(key)
-        else: selected.append(key)
+        if key in selected:
+            selected.remove(key)
+        else:
+            selected.append(key)
         await state.update_data(interests=selected)
         await callback.message.edit_reply_markup(reply_markup=interests_kb(selected))
     await callback.answer()
 
-# ── Settings ───────────────────────────────────────────────────────────────────
+# ── Настройки ──────────────────────────────────────────────────────────────────
 
 @router.message(F.text == "⚙️ Настройки")
 async def cmd_settings(message: Message):
@@ -156,7 +164,7 @@ async def settings_action(callback: CallbackQuery, state: FSMContext):
         await state.set_state(Sett.gender)
     elif action == "interests":
         user = db.get_user(callback.from_user.id)
-        sel = user.get("interests", "").split(",") if user.get("interests") else []
+        sel  = user.get("interests", "").split(",") if user.get("interests") else []
         await state.update_data(interests=sel)
         await callback.message.answer("Выбери интересы:", reply_markup=interests_kb(sel))
         await state.set_state(Sett.interests)
@@ -171,15 +179,19 @@ async def sett_name(message: Message, state: FSMContext):
     db.upsert_user(message.from_user.id, name=name)
     await state.clear()
     profile = db.get_active_profile(message.from_user.id)
-    await message.answer(f"✅ Имя изменено: <b>{name}</b>", parse_mode="HTML", reply_markup=main_kb(bool(profile)))
+    await message.answer(
+        f"✅ Имя изменено: <b>{name}</b>",
+        parse_mode="HTML",
+        reply_markup=main_kb(bool(profile))
+    )
 
 @router.message(Sett.age)
 async def sett_age(message: Message, state: FSMContext):
     try:
         age = int(message.text.strip())
-        assert 10 <= age <= 99
+        assert 13 <= age <= 99
     except:
-        await message.answer("Введи возраст (10–99):")
+        await message.answer("Введи возраст (13–99):")
         return
     db.upsert_user(message.from_user.id, age=age)
     await state.clear()
@@ -197,8 +209,8 @@ async def sett_gender(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(Sett.interests, F.data.startswith("interest:"))
 async def sett_interests(callback: CallbackQuery, state: FSMContext):
-    key = callback.data.split(":")[1]
-    data = await state.get_data()
+    key      = callback.data.split(":")[1]
+    data     = await state.get_data()
     selected = data.get("interests", [])
     if key == "done":
         if not selected:
@@ -209,8 +221,10 @@ async def sett_interests(callback: CallbackQuery, state: FSMContext):
         profile = db.get_active_profile(callback.from_user.id)
         await callback.message.answer("✅ Интересы обновлены!", reply_markup=main_kb(bool(profile)))
     else:
-        if key in selected: selected.remove(key)
-        else: selected.append(key)
+        if key in selected:
+            selected.remove(key)
+        else:
+            selected.append(key)
         await state.update_data(interests=selected)
         await callback.message.edit_reply_markup(reply_markup=interests_kb(selected))
     await callback.answer()
@@ -218,5 +232,8 @@ async def sett_interests(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "cancel")
 async def cancel_action(callback: CallbackQuery, state: FSMContext):
     await state.clear()
-    await callback.message.delete()
+    try:
+        await callback.message.delete()
+    except:
+        pass
     await callback.answer()

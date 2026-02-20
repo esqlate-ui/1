@@ -1,53 +1,60 @@
 import time
 from aiogram import Router, F, Bot
-from aiogram.types import Message, CallbackQuery, InputMediaPhoto, InputMediaVideo, InputMediaAudio
+from aiogram.types import Message, CallbackQuery, InputMediaPhoto, InputMediaVideo
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
 import database as db
-from config import PROFILE_COOLDOWN, INTERESTS_DISPLAY
-from keyboards import main_kb, profile_view_kb
+from config import PROFILE_COOLDOWN, INTERESTS_DISPLAY, PROFILES_LIMIT_FREE, PROFILES_LIMIT_PREMIUM
+from keyboards import main_kb, profile_view_kb, confirm_delete_profile_kb, filters_kb, filter_gender_kb
 
 router = Router()
 
 GENDER_MAP = {"male": "👦 Парень", "female": "👧 Девушка", "other": "⚧ Другое"}
 
 class ProfileFSM(StatesGroup):
-    collecting = State()  # Сбор медиа/текста для анкеты
+    collecting = State()
+
+class FilterFSM(StatesGroup):
+    age_range = State()
 
 def profile_caption(user: dict, profile: dict) -> str:
+    is_prem = db.is_premium(user["user_id"])
+    badge   = "👑 " if is_prem else ""
     interests = [INTERESTS_DISPLAY.get(i, i) for i in (user.get("interests") or "").split(",") if i]
     return (
-        f"👤 <b>{user['name']}</b>, {user['age']} лет  {GENDER_MAP.get(user.get('gender'), '')}\n"
+        f"{badge}<b>{user['name']}</b>, {user['age']} лет  {GENDER_MAP.get(user.get('gender'), '')}\n"
         f"🎯 {' '.join(interests)}\n\n"
-        f"📝 {profile['description']}\n\n"
-        f"❤️ {profile.get('likes', 0)} лайков"
+        f"📝 {profile['description']}"
     )
 
-async def send_profile(bot: Bot, chat_id: int, user: dict, profile: dict, show_actions: bool = True):
-    """Отправляет анкету с медиафайлами"""
+async def send_profile(bot: Bot, chat_id: int, user: dict, profile: dict,
+                       show_actions: bool = True):
     media_list = db.get_profile_media(profile["id"])
-    caption = profile_caption(user, profile)
-    kb = profile_view_kb(profile["id"], user["user_id"], profile.get("likes", 0)) if show_actions else None
+    caption    = profile_caption(user, profile)
+    kb = profile_view_kb(profile["id"], user["user_id"]) if show_actions else None
 
     if not media_list:
         await bot.send_message(chat_id, caption, parse_mode="HTML", reply_markup=kb)
         return
 
-    # Одиночный медиафайл
     if len(media_list) == 1:
         m = media_list[0]
         if m["media_type"] == "photo":
-            await bot.send_photo(chat_id, m["file_id"], caption=caption, parse_mode="HTML", reply_markup=kb)
+            await bot.send_photo(chat_id, m["file_id"], caption=caption,
+                                 parse_mode="HTML", reply_markup=kb)
         elif m["media_type"] == "video":
-            await bot.send_video(chat_id, m["file_id"], caption=caption, parse_mode="HTML", reply_markup=kb)
+            await bot.send_video(chat_id, m["file_id"], caption=caption,
+                                 parse_mode="HTML", reply_markup=kb)
         elif m["media_type"] == "voice":
-            await bot.send_voice(chat_id, m["file_id"], caption=caption, parse_mode="HTML", reply_markup=kb)
+            await bot.send_voice(chat_id, m["file_id"])
+            await bot.send_message(chat_id, caption, parse_mode="HTML", reply_markup=kb)
         else:
             await bot.send_message(chat_id, caption, parse_mode="HTML", reply_markup=kb)
         return
 
-    # Медиагруппа (фото/видео)
+    # Медиагруппа — кнопки к последнему сообщению
     photo_video = [m for m in media_list if m["media_type"] in ("photo", "video")]
     if photo_video:
         media_group = []
@@ -59,13 +66,12 @@ async def send_profile(bot: Bot, chat_id: int, user: dict, profile: dict, show_a
                 media_group.append(InputMediaVideo(media=m["file_id"], caption=cap, parse_mode="HTML"))
         await bot.send_media_group(chat_id, media_group)
 
-    # Голосовые отдельно
     voices = [m for m in media_list if m["media_type"] == "voice"]
     for v in voices:
-        await bot.send_voice(chat_id, v["file_id"], caption="🎤 Голосовое из анкеты")
+        await bot.send_voice(chat_id, v["file_id"])
 
     if kb:
-        await bot.send_message(chat_id, "👆 Что думаешь?", reply_markup=kb)
+        await bot.send_message(chat_id, "👆 Написать:", reply_markup=kb)
 
 # ── Добавить анкету ────────────────────────────────────────────────────────────
 
@@ -78,34 +84,47 @@ async def add_profile_start(message: Message, state: FSMContext):
     if db.is_banned(message.from_user.id):
         await message.answer("🚫 Ты заблокирован.")
         return
-    elapsed = time.time() - db.get_last_profile_time(message.from_user.id)
-    if elapsed < PROFILE_COOLDOWN:
-        rem = int(PROFILE_COOLDOWN - elapsed)
-        m, s = divmod(rem, 60)
-        await message.answer(f"⏳ Подожди ещё <b>{m}м {s}с</b> перед созданием новой анкеты.", parse_mode="HTML")
-        return
+
+    # Кулдаун только для бесплатных
+    if not db.is_premium(message.from_user.id):
+        elapsed = time.time() - db.get_last_profile_time(message.from_user.id)
+        if elapsed < PROFILE_COOLDOWN:
+            rem  = int(PROFILE_COOLDOWN - elapsed)
+            m, s = divmod(rem, 60)
+            await message.answer(
+                f"⏳ Подожди ещё <b>{m}м {s}с</b> перед созданием новой анкеты.\n"
+                f"<i>👑 Premium снимает это ограничение!</i>",
+                parse_mode="HTML"
+            )
+            return
 
     await state.update_data(description="", media=[])
     await state.set_state(ProfileFSM.collecting)
+
+    is_prem = db.is_premium(message.from_user.id)
+    media_hint = (
+        "Можно отправить фото, видео, голосовые."
+        if is_prem else
+        "Бесплатно: только текст и голосовые. Фото и видео — с 👑 Premium."
+    )
     await message.answer(
-        "📝 <b>Создание анкеты</b>\n\n"
-        "Отправь текст, фото, видео, голосовые — всё что хочешь показать в анкете.\n"
-        "Можно отправить несколько сообщений.\n\n"
-        "Когда закончишь — нажми кнопку ниже 👇",
+        f"📝 <b>Создание анкеты</b>\n\n"
+        f"Отправь описание и медиа.\n{media_hint}\n\n"
+        f"Когда закончишь — нажми кнопку ниже 👇",
         parse_mode="HTML",
-        reply_markup=__import__("aiogram.types", fromlist=["ReplyKeyboardMarkup"]).ReplyKeyboardMarkup(
-            keyboard=[[__import__("aiogram.types", fromlist=["KeyboardButton"]).KeyboardButton(text="✅ Опубликовать анкету")]],
+        reply_markup=ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text="✅ Опубликовать анкету")]],
             resize_keyboard=True
         )
     )
 
 @router.message(ProfileFSM.collecting, F.text == "✅ Опубликовать анкету")
 async def publish_profile(message: Message, state: FSMContext, bot: Bot):
-    data = await state.get_data()
-    desc = data.get("description", "").strip()
+    data  = await state.get_data()
+    desc  = data.get("description", "").strip()
     media = data.get("media", [])
     if not desc and not media:
-        await message.answer("Анкета пустая! Добавь хотя бы текст или медиа.")
+        await message.answer("Анкета пустая! Добавь хотя бы текст или голосовое.")
         return
 
     pid = db.create_profile(message.from_user.id, desc or "Загляни в мою анкету 👀")
@@ -113,7 +132,6 @@ async def publish_profile(message: Message, state: FSMContext, bot: Bot):
         db.add_profile_media(pid, m["file_id"], m["type"])
 
     await state.clear()
-    profile = db.get_active_profile(message.from_user.id)
     await message.answer(
         "✅ Анкета опубликована! Другие пользователи уже могут её видеть.",
         reply_markup=main_kb(has_profile=True)
@@ -121,49 +139,75 @@ async def publish_profile(message: Message, state: FSMContext, bot: Bot):
 
 @router.message(ProfileFSM.collecting)
 async def collect_profile_content(message: Message, state: FSMContext):
-    data = await state.get_data()
+    data  = await state.get_data()
     media = data.get("media", [])
-    desc = data.get("description", "")
+    desc  = data.get("description", "")
+    is_prem = db.is_premium(message.from_user.id)
 
     if message.text:
         desc = (desc + "\n" + message.text).strip()[:500]
         await state.update_data(description=desc)
         await message.answer(f"✏️ Текст добавлен ({len(desc)}/500 симв.)")
-    elif message.photo:
-        media.append({"file_id": message.photo[-1].file_id, "type": "photo"})
-        await state.update_data(media=media)
-        await message.answer(f"🖼 Фото добавлено ({len(media)} медиа)")
-    elif message.video:
-        media.append({"file_id": message.video.file_id, "type": "video"})
-        await state.update_data(media=media)
-        await message.answer(f"🎬 Видео добавлено ({len(media)} медиа)")
     elif message.voice:
         media.append({"file_id": message.voice.file_id, "type": "voice"})
         await state.update_data(media=media)
         await message.answer(f"🎤 Голосовое добавлено ({len(media)} медиа)")
+    elif message.photo:
+        if not is_prem:
+            await message.answer("📸 Фото только для 👑 Premium. Голосовые и текст — бесплатно!")
+        else:
+            media.append({"file_id": message.photo[-1].file_id, "type": "photo"})
+            await state.update_data(media=media)
+            await message.answer(f"🖼 Фото добавлено ({len(media)} медиа)")
+    elif message.video:
+        if not is_prem:
+            await message.answer("🎬 Видео только для 👑 Premium.")
+        else:
+            media.append({"file_id": message.video.file_id, "type": "video"})
+            await state.update_data(media=media)
+            await message.answer(f"🎬 Видео добавлено ({len(media)} медиа)")
     else:
-        await message.answer("Поддерживается: текст, фото, видео, голосовые.")
+        await message.answer("Поддерживается: текст, голосовые" + (", фото, видео." if is_prem else ". Фото/видео — с Premium."))
 
 # ── Моя анкета / Удалить ──────────────────────────────────────────────────────
 
 @router.message(F.text == "📝 Моя анкета")
 async def my_profile(message: Message, bot: Bot):
-    user = db.get_user(message.from_user.id)
+    user    = db.get_user(message.from_user.id)
     profile = db.get_active_profile(message.from_user.id)
     if not profile:
         await message.answer("У тебя нет активной анкеты.", reply_markup=main_kb(False))
         return
     await message.answer("📋 <b>Твоя анкета:</b>", parse_mode="HTML")
     await send_profile(bot, message.chat.id, user, profile, show_actions=False)
+    # Показываем кнопку удаления
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    await message.answer(
+        "Хочешь удалить анкету?",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🗑 Удалить анкету", callback_data="delprofile:ask")]
+        ])
+    )
 
-@router.message(F.text == "🗑 Удалить анкету")
-async def del_profile(message: Message):
-    profile = db.get_active_profile(message.from_user.id)
-    if not profile:
-        await message.answer("У тебя нет активной анкеты.", reply_markup=main_kb(False))
-        return
-    db.delete_active_profile(message.from_user.id)
-    await message.answer("🗑 Анкета удалена.", reply_markup=main_kb(False))
+@router.callback_query(F.data == "delprofile:ask")
+async def del_profile_ask(callback: CallbackQuery):
+    await callback.message.edit_text(
+        "Уверен? Анкету придётся создавать заново.",
+        reply_markup=confirm_delete_profile_kb()
+    )
+    await callback.answer()
+
+@router.callback_query(F.data == "delprofile:yes")
+async def del_profile_confirm(callback: CallbackQuery):
+    db.delete_active_profile(callback.from_user.id)
+    await callback.message.edit_text("🗑 Анкета удалена.")
+    await callback.message.answer("Главное меню:", reply_markup=main_kb(False))
+    await callback.answer()
+
+@router.callback_query(F.data == "delprofile:no")
+async def del_profile_cancel(callback: CallbackQuery):
+    await callback.message.edit_text("Отменено.")
+    await callback.answer()
 
 # ── Просмотр анкет ─────────────────────────────────────────────────────────────
 
@@ -176,38 +220,140 @@ async def browse_profiles(message: Message, bot: Bot):
     if not user or not user.get("registered"):
         await message.answer("Сначала зарегистрируйся: /start")
         return
-    interests = [i for i in (user.get("interests") or "").split(",") if i]
-    profiles = db.get_matching_profiles(message.from_user.id, interests, limit=2)
+
+    is_prem    = db.is_premium(message.from_user.id)
+    limit      = PROFILES_LIMIT_PREMIUM if is_prem else PROFILES_LIMIT_FREE
+    interests  = [i for i in (user.get("interests") or "").split(",") if i]
+
+    # Фильтры — только для премиума
+    sg         = user.get("search_gender", "any") if is_prem else "any"
+    age_min    = user.get("search_age_min", 0) if is_prem else 0
+    age_max    = user.get("search_age_max", 99) if is_prem else 99
+    media_only = bool(user.get("search_media_only", 0)) if is_prem else False
+
+    profiles = db.get_matching_profiles(
+        message.from_user.id, interests, limit=limit,
+        search_gender=sg, age_min=age_min, age_max=age_max,
+        media_only=media_only, viewer_is_premium=is_prem
+    )
     if not profiles:
-        await message.answer("😔 Пока нет подходящих анкет. Попробуй позже или измени интересы в настройках!")
+        await message.answer("😔 Пока нет подходящих анкет. Попробуй позже или измени интересы!")
         return
+
     for p in profiles:
         p_user = db.get_user(p["user_id"])
         if not p_user:
             continue
         await send_profile(bot, message.chat.id, p_user, p, show_actions=True)
 
-# ── Лайк ──────────────────────────────────────────────────────────────────────
+    # Кнопка фильтров для премиума после показа анкет
+    if is_prem:
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+        await message.answer(
+            "🔍 Настроить фильтры поиска:",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="⚙️ Фильтры", callback_data="open_filters")]
+            ])
+        )
+    if is_prem:
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+        await message.answer(
+            "🔍 Настроить фильтры поиска:",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="⚙️ Фильтры", callback_data="open_filters")]
+            ])
+        )
 
-@router.callback_query(F.data.startswith("like:"))
-async def like_profile_cb(callback: CallbackQuery):
-    profile_id = int(callback.data.split(":")[1])
-    liked = db.like_profile(profile_id, callback.from_user.id)
+# ── Фильтры (Premium) ─────────────────────────────────────────────────────────
 
-    # Обновить кнопку
-    conn = db.get_conn()
-    c = conn.cursor()
-    c.execute("SELECT * FROM profiles WHERE id=%s", (profile_id,))
-    cols = [d[0] for d in c.description]
-    row = c.fetchone()
-    conn.close()
-    if row:
-        p = dict(zip(cols, row))
-        from keyboards import profile_view_kb
-        try:
-            await callback.message.edit_reply_markup(
-                reply_markup=profile_view_kb(profile_id, p["user_id"], p.get("likes", 0))
-            )
-        except:
-            pass
-    await callback.answer("❤️ Лайк!" if liked else "💔 Лайк убран")
+@router.callback_query(F.data == "open_filters")
+async def open_filters(callback: CallbackQuery):
+    if not db.is_premium(callback.from_user.id):
+        await callback.answer("🔒 Фильтры доступны только с 👑 Premium", show_alert=True)
+        return
+    user = db.get_user(callback.from_user.id)
+    await callback.message.edit_text(
+        "🔍 <b>Фильтры поиска</b>\n\nНастрой кого хочешь видеть:",
+        parse_mode="HTML",
+        reply_markup=filters_kb(
+            user.get("search_gender", "any"),
+            user.get("search_age_min", 0),
+            user.get("search_age_max", 99),
+            bool(user.get("search_media_only", 0))
+        )
+    )
+    await callback.answer()
+
+@router.callback_query(F.data == "filter:gender")
+async def filter_gender(callback: CallbackQuery):
+    await callback.message.edit_text(
+        "Кого ищешь?",
+        reply_markup=filter_gender_kb()
+    )
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("fgender:"))
+async def set_filter_gender(callback: CallbackQuery):
+    val  = callback.data.split(":")[1]
+    user = db.get_user(callback.from_user.id)
+    db.upsert_user(callback.from_user.id, search_gender=val)
+    await callback.message.edit_text(
+        "🔍 <b>Фильтры поиска</b>\n\nНастрой кого хочешь видеть:",
+        parse_mode="HTML",
+        reply_markup=filters_kb(
+            val,
+            user.get("search_age_min", 0),
+            user.get("search_age_max", 99),
+            bool(user.get("search_media_only", 0))
+        )
+    )
+    await callback.answer("✅ Сохранено")
+
+@router.callback_query(F.data == "filter:age")
+async def filter_age_prompt(callback: CallbackQuery, state: FSMContext):
+    await callback.message.answer(
+        "Введи диапазон возраста через дефис.\nПример: <b>18-30</b>",
+        parse_mode="HTML"
+    )
+    await state.set_state(FilterFSM.age_range)
+    await callback.answer()
+
+@router.message(FilterFSM.age_range)
+async def filter_age_input(message: Message, state: FSMContext):
+    try:
+        parts = message.text.strip().split("-")
+        age_min = int(parts[0].strip())
+        age_max = int(parts[1].strip())
+        assert 13 <= age_min <= age_max <= 99
+    except:
+        await message.answer("Неверный формат. Пример: 18-30")
+        return
+    db.upsert_user(message.from_user.id, search_age_min=age_min, search_age_max=age_max)
+    await state.clear()
+    user = db.get_user(message.from_user.id)
+    await message.answer(
+        f"✅ Возраст: {age_min}–{age_max}\n\nФильтры обновлены!",
+        reply_markup=main_kb(bool(db.get_active_profile(message.from_user.id)))
+    )
+
+@router.callback_query(F.data == "filter:media_only")
+async def filter_media_only(callback: CallbackQuery):
+    user     = db.get_user(callback.from_user.id)
+    cur      = bool(user.get("search_media_only", 0))
+    new_val  = 0 if cur else 1
+    db.upsert_user(callback.from_user.id, search_media_only=new_val)
+    user = db.get_user(callback.from_user.id)
+    await callback.message.edit_reply_markup(
+        reply_markup=filters_kb(
+            user.get("search_gender", "any"),
+            user.get("search_age_min", 0),
+            user.get("search_age_max", 99),
+            bool(new_val)
+        )
+    )
+    await callback.answer("✅")
+
+@router.callback_query(F.data == "filter:save")
+async def filter_save(callback: CallbackQuery):
+    await callback.message.edit_text("✅ Фильтры сохранены!")
+    await callback.answer()
